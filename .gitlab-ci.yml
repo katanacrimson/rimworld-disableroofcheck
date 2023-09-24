@@ -1,0 +1,56 @@
+stages:
+# todo: add xml,c# linting?
+# - 'lint'
+- 'build'
+- 'package'
+- 'release'
+
+.build:
+  stage: 'build'
+  image: 'mcr.microsoft.com/dotnet/sdk:5.0'
+  tags:
+  - 'amd64'
+  script:
+  - 'dotnet build Source/$RW_VERSION/${CI_PROJECT_TITLE}.csproj -c Release -o ${RW_VERSION}/Assemblies'
+  artifacts:
+    paths:
+    - '${RW_VERSION}/Assemblies/${CI_PROJECT_TITLE}*.dll'
+    expire_in: '1 week'
+
+build:
+  extends: '.build'
+  parallel:
+    matrix:
+    - RW_VERSION: ['1.3', '1.4']
+
+package:
+  stage: 'package'
+  script:
+  - 'mkdir ${CI_PROJECT_TITLE}'
+  - 'cp -R About ${CI_PROJECT_TITLE}/'
+  - 'cp -R 1.3 ${CI_PROJECT_TITLE}/'
+  - 'cp -R 1.4 ${CI_PROJECT_TITLE}/'
+  - 'echo Packaging release…'
+  artifacts:
+    name: '${CI_PROJECT_TITLE}_$CI_COMMIT_TAG'
+    paths:
+    - '${CI_PROJECT_TITLE}/'
+    expire_in: '1 week'
+
+release:
+  stage: 'release'
+  image: 'registry.gitlab.com/gitlab-org/release-cli:latest'
+  script:
+  - 'echo Making release…'
+  release:
+    name: '${CI_COMMIT_TAG}'
+    tag_name: '${CI_COMMIT_TAG}'
+    description: '${CI_COMMIT_MESSAGE}'
+    assets:
+      links:
+      - name: '${CI_PROJECT_TITLE}_${CI_COMMIT_TAG}.zip'
+        url: '${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/download?job=package'
+        filepath: '/release/${CI_COMMIT_TAG}'
+  only:
+    refs:
+    - 'tags'
